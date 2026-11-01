@@ -39,6 +39,7 @@ Status: Design hardening and v1 decisions complete; waiting for explicit `GO`
 - Added a Node.js workspace boundary with separate API, web and pure game-engine packages plus strict shared TypeScript compiler settings.
 - Added `@ludo/game-engine` deterministic Ludo rules core: 2–4 unique seats, home/track/home-lane movement, safe squares, captures, finish order, six extra turns, third-six forfeiture and a server-authoritative pure transition interface.
 - No network listener, authentication flow, client bundle, database migration, secret, dependency install, lockfile or deployment configuration has been added yet.
+- Added an API public-runtime configuration parser that rejects invalid environments, unsafe production origins and invalid ports, and deliberately excludes all secrets from public runtime configuration.
 - Verification has not run because no dependencies or test harness have been installed; this remains pending for the foundation acceptance gate.
 
 ## Verification evidence — 2026-11-01
