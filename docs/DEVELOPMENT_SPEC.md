@@ -1,141 +1,187 @@
 # Multiplayer Ludo — Product and Development Specification
 
-**Status:** planning baseline; implementation has not started  
-**Owner repo:** https://github.com/ViswjeetKumar/ludo-gaming-app  
+**Status:** hardened planning baseline; application implementation has not started  
+**Owner repository:** https://github.com/ViswjeetKumar/ludo-gaming-app  
 **Last updated:** 2026-11-01
 
-## 1. Product goal
+## 1. Product goal and fair-play boundary
 
-Build a responsive web application for real-time 2–4 player Ludo. Players can register, create or join a room, invite friends, play a complete match, reconnect after network loss, and inspect a fairness record after the match. The server is authoritative for membership, turns, legal actions, dice outcomes, timers and final results.
+Build a responsive, real-time web application for 2–4 authenticated players. The backend is authoritative for room membership, seat assignment, timers, legal actions, dice outcomes, event ordering and results. Clients render sanitized state and submit requests; they never decide an outcome.
 
-“Fair” means rules and random outcomes are generated and checked by documented deterministic processes, with an audit trail to detect manipulation. No software can promise absolute fairness or eliminate every outage, compromised endpoint or collusion risk; communicate the guarantees and their limits plainly. No cash wagering, entry fees, prizes or real-money wallet are in scope unless separately specified and reviewed.
+Fair play means a documented and independently reproducible dice protocol, immutable game-event history, server-side rule enforcement and operational monitoring. It does not eliminate all residual risks: a malicious server operator could abort a game before revealing its seed, an insider could collude, or a compromised production environment could affect availability. The product must detect, limit, record and communicate these incidents; it must never claim an absolute guarantee.
 
-## 2. Product principles and release goals
+No cash wagering, entry fees, prizes, real-money wallet, bots or guest seats are in v1 **[CONFIRM]**.
 
-- Same documented rules for every player in a match; explicit rules version stored with the match.
-- No client decides dice, turn ownership, legal moves, capture, safe-square status or winner.
-- Durable and replayable match history; reconnect does not reset or duplicate a move.
-- Secure account/session handling, least data collection, abuse reporting, moderation and operational auditability.
-- Keyboard accessible controls, readable contrast, responsive touch layout, reduced-motion option and clear connection state.
-- First release focuses on private/friend rooms and public matchmaking with standard classic Ludo rules. Cosmetics, rankings and tournaments follow only after core integrity and operations are established.
+## 2. Scope and release plan
 
-## 3. Roles
+### v1 MVP
+- Accounts: email verification, password login/reset, sessions/revocation and player profile.
+- Private invite-code rooms for 2–4 players, ready/start flow and one or more rematches in the same room.
+- Server-authoritative rules engine with the frozen classic-rules preset in [RULES.md](RULES.md).
+- Commit-reveal player entropy, provably reproducible dice, proof reveal and game history.
+- Plain WebSocket realtime play, reconnect/resync, timers, forfeit handling and accessible mobile-first web UI.
+- Reports and minimum moderation/admin controls required to operate safely.
 
-- **Guest:** landing page and rules; can register/sign in.
-- **Player:** profile, friends, rooms, invitations, matchmaking, live game, history, settings and reports.
-- **Moderator:** review reports, mute/suspend accounts, terminate abusive rooms, with reason and audit record.
-- **Administrator/on-call:** operational configuration and incident response; privileged actions require strong authentication and audit logging.
+### v1.1+ behind feature flags
+Public matchmaking, friends/social graph, text chat, OAuth, guest play, bots, cosmetics, rankings and tournaments. They are excluded from v1 runtime, API surface and launch gate unless explicitly enabled after a design/security review.
+
+This resolves the earlier scope ambiguity: v1 is private rooms first; matchmaking and friends do not ship in v1.
+
+## 3. Roles and access
+
+- **Visitor:** reads public information and may create an account. No game or room access.
+- **Player:** owns sessions/profile, creates or joins permitted rooms, plays a seat and files reports.
+- **Moderator:** reviews reports and applies scoped moderation actions. MFA, separate admin origin/network, least privilege and audit logging are mandatory.
+- **Administrator/on-call:** configures operation and handles incidents. MFA, allowlisted access path and immutable audit log are mandatory.
+- The database has separate API, roll/fairness, migrator, read-only analytics and support roles. Only the roll/fairness role can read `GAME_SECRETS`.
 
 ## 4. Functional requirements
 
 ### Accounts and profile
-- Sign up/sign in, verified email, sign out all sessions, password reset with expiring single-use token; optional OAuth can be added later.
-- Unique username, display name/avatar selection, privacy and notification preferences.
-- View and revoke active sessions; account export/deletion workflow with documented retention exceptions for integrity records.
-- Never reveal whether a submitted email exists in login/reset responses.
+- Unique username and verified email; generic success/error responses prevent account enumeration.
+- Argon2id password hashing, breached-password screening, reset tokens/verification tokens hashed at rest and single-use.
+- Short-lived access credentials and rotating refresh-token families in Secure, HttpOnly, SameSite cookies; reuse detection revokes the family.
+- Session list and revoke-all; password change/suspension revokes active refresh families.
+- Player display name, avatar reference and privacy preferences. Data export/deletion follows retention constraints in section 9.
+- Moderator/admin MFA is required; player passkey/TOTP support is deferred **[CONFIRM]**.
 
-### Social and rooms
-- Find friends by exact username, request/accept/decline/remove/block.
-- Create private invite-code room or public room, choose 2–4 players and approved rule presets; host can start only when minimum seats are ready.
-- Invite friends by in-app invite; bearer links are high-entropy, hashed at rest, single-use and expiring. Do not leak private room details to non-members.
-- Join/leave/ready state, host handoff, room expiry, duplicate login/session handling and clear full/expired-room errors.
-- Public matchmaking queue with region/latency preference and simple skill bands only after sufficient population; prevent queue farming.
+### Private rooms and matches
+- A signed-in player creates a 2–4 seat private room. The server stores only a hash of the high-entropy join code/invite token, rate-limits guesses, scopes tokens to a room, expires them and records use.
+- Members join, leave and mark ready. Host starts only when valid seats meet the rules preset. Start freezes membership, seat/color order and a `rules_snapshot`; room rules become immutable for that game.
+- A room can host rematches; every match has a new game ID, event chain, secret seed and proof.
+- v1 has no public room listing, friends, matchmaking, chat, bots or guests.
 
-### Gameplay
-- Server creates immutable seat/color order, match ID, rules version and fairness commitment before first roll.
-- Current player rolls through an authenticated command; server validates phase/turn, generates roll and legal options, applies selected move only if legal.
-- Standard rules must be fully specified in `docs/RULES.md`: entry on six, extra roll policy, blockades, captures, safe squares, exact finish, three-sixes rule (if selected), turn timeout and disconnect policy. The initial rules preset must be agreed before code; defaults are documented and versioned.
-- Clear animations are presentation only; authoritative state changes come from server events. Rejected commands return a stable error code and current version without hidden mutation.
-- Reconnect fetches a sanitized snapshot plus events after last sequence number. If the sequence is outside retention, fetch a complete snapshot. Replays are idempotent.
-- Disconnect grace period, reconnect countdown and eventual forfeit/seat takeover policy are visible before match start. Never silently change a human seat into a bot without the room's agreed rule.
-- End match exactly once; record winner/placements, event log, roll proof and fairness reveal. Allow replayable history and report match.
-- Optional in-game text chat with length limits, rate limits, block/mute/report and moderation filters.
+### Game authority, reconnect and termination
+- The backend serializes every command per game using transaction row locking or an equivalent single-flight game queue backed by the DB transaction. It validates schema, authenticated user, room membership, seat, active turn, expected game version and idempotency key before any state transition.
+- `GAME_EVENTS` is the event-sourced truth; snapshots are derived caches. Accepted state changes, outbox rows and idempotency result records commit atomically before broadcasting.
+- Reconnect obtains an authenticated sanitized snapshot plus events after the last verified sequence. Duplicate/replayed roll or move commands return the original accepted response from `COMMAND_LOG`.
+- Deadlines are stored in `GAMES.turn_deadline_at` and recovered after process/deployment restart. Timer behavior and forfeit rules are in [RULES.md](RULES.md).
+- A match ends once according to frozen rules. The server writes final placements/reason, emits terminal events, releases fairness evidence and makes a participant-scoped history available.
+- Report flow: player may report a participant/game, creates a `REPORTS` row; moderator resolution and actions are audited.
 
-### Fair randomness and audit
-- Before the first roll, backend obtains a 256-bit server seed from the OS cryptographically secure random generator and publishes `SHA-256(server_seed)` in the match-start event.
-- Versioned deterministic roll derivation: HMAC-SHA-256 keyed by server seed over canonical `game_id | turn_number | roll_index | purpose`. Convert bytes to 1..6 with rejection sampling to avoid modulo bias. Pin canonical encoding and test vectors in the fairness implementation.
-- After completion or void, reveal the server seed. An independent verifier replays all rolls and checks the commitment, event sequence and rules version. Never reveal seed before terminal state.
-- Future optional player entropy protocol: each player commits a random contribution before play and reveals after all commits; derive final seed from server secret plus verified contributions. Specify abort/missing-reveal behavior before enabling it.
-- Store algorithm version and proof artifacts. Public proof omits email/IP/private chat. Log administrative rerolls as prohibited; if a match is voided, preserve original proof and reason.
-- Fairness controls reduce unilateral manipulation; server compromise, collusion, or malicious clients remain residual risks. Document operations and incident reporting.
+### Fairness protocol
+1. Roll/fairness service generates a 256-bit `server_seed` using the OS cryptographic RNG.
+2. It envelope-encrypts that seed in `GAME_SECRETS`, using a per-game data key wrapped by a KMS master key. The secret never appears in game state, events, caches, Redis, logs, metrics, crash dumps, analytics, plaintext backups or client response.
+3. The server publishes `SHA-256(server_seed)` as `server_seed_commitment`.
+4. Each seated player submits a commitment to a cryptographically random client nonce; after all commitments, each reveals the nonce.
+5. Service validates every reveal against its commitment, derives `final_seed = HMAC-SHA-256(server_seed, canonical(game_id, ordered_player_nonces))`, and only then starts the game.
+6. A missing/invalid reveal before the first roll cancels start and returns the room to lobby with no penalty.
+7. Dice rolls use the exact binary encoding and rejection sampling in [FAIRNESS_VECTORS.md](FAIRNESS_VECTORS.md). No administrator reroll exists.
+8. At finish/void, service discloses the server seed and nonce proofs in `FAIRNESS_PROOFS`, destroys the active secret material, and independent verifier logic replays commitment, roll sequence, event hashes and frozen rules.
+9. Monitor aborts between commitment/reveal/start by actor/system and alert on anomalous rates. Residual risks are server-abort bias and insider collusion; events, availability records and independent verification make them observable but do not make them impossible.
 
-## 5. Non-functional and security requirements
+### Realtime transport and scaling
+- v1 uses **plain WebSocket** only; it does not use Socket.IO **[CONFIRM]**.
+- Browser first calls an authenticated REST endpoint to obtain a single-use WebSocket ticket with 60-second TTL, bound to authenticated user, requested origin and session. Ticket is sent in the initial WebSocket message, never in URL/query parameters, then consumed and revoked.
+- Enforce TLS, origin allowlist, schema validation, authorization on every message, per-account/IP limits designed to avoid lockout enumeration, per-user connection cap, message-size cap, heartbeat, slow-consumer backpressure/disconnect and reconnection exponential backoff.
+- Horizontally scale with sticky routing at the edge plus Redis pub/sub for game-event fan-out; correctness remains in PostgreSQL transaction serialization. Redis outage stops new socket fan-out safely but cannot lose committed state. Document precise degraded behavior before launch.
+- Timer worker reads DB deadlines and uses a compare-and-swap/lock transaction; only one worker can resolve a deadline.
 
-### Security
-- Threat model accounts, sessions, room codes, WebSocket commands, matchmaking, game state, chat, moderation tools, logs and deployment secrets.
-- Use Argon2id (or a reviewed modern password hashing configuration), generic auth errors, email verification and rate limits for sign-in/reset/register.
-- Short-lived access token; rotating refresh token in Secure, HttpOnly, SameSite cookie. CSRF protection for cookie-authenticated state changes; strict CORS allowlist. Store only refresh-token hashes; revoke on rotation reuse, logout, password change and account suspension.
-- TLS only. Validate every request with schemas, length/range bounds and explicit authorization. Escape user-generated content; avoid unsafe HTML rendering. Set CSP, HSTS, frame/referrer/content-type protections, secure cookie policy and dependency scanning.
-- WebSocket origin check, handshake authentication, per-message authorization, schema validation, per-user/IP rate limits, message size caps, heartbeat and connection caps. Never trust client clocks or state.
-- Use parameterized SQL and least-privilege DB roles. Secrets in a managed secret store, never source control or client bundle. Encrypt backups and test restore.
-- Prevent enumeration, brute force, CSRF, XSS, injection, IDOR, replay, race/duplicate commands, room-code guessing, socket flooding, chat abuse and moderator privilege escalation.
-- Audit sensitive admin actions without logging passwords, tokens, raw reset links, private message content unnecessarily, or full IP data beyond defined security need/retention.
-- Security incident runbook, dependency patch policy, backup/restore process, monitoring, alerting and rollback plan are release requirements.
+## 5. API, error and event contracts
 
-### Reliability, performance and accessibility
-- Target p95 command acknowledgement < 500 ms within selected deployment region (excluding animation); reconnect snapshot < 2 s for ordinary match.
-- One region initially; define service objectives, graceful degradation and maintenance behavior before launch.
-- Durable transaction first, broadcast second. Transactional outbox or equivalent ensures committed events are eventually delivered after restart.
-- Health/readiness checks, structured logs with correlation IDs, metrics for queue, command latency, errors, disconnects and fairness verification.
-- WCAG 2.2 AA as a target: keyboard operation, focus visibility, labels, color not sole state cue, screen-reader status announcements and reduced motion.
-- Support current Chrome, Edge, Firefox, Safari plus mobile browsers; feature-detect WebSocket and fall back to reconnect UI (not a silent insecure transport).
+### REST surface (v1)
+`POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/password-reset/request`, `POST /auth/password-reset/confirm`, `POST /auth/email/verify`, `GET /me`, `GET /sessions`, `DELETE /sessions/{id}`, `POST /rooms`, `POST /rooms/{id}/join`, `POST /rooms/{id}/ready`, `POST /rooms/{id}/start`, `POST /realtime/ticket`, `GET /games/{id}`, `GET /games/{id}/events?after={seq}`, `GET /games/{id}/fairness`, `POST /reports`.
 
-## 6. Proposed architecture
+### WebSocket command envelope
+```json
+{
+  "type": "game.roll",
+  "version": 1,
+  "request_id": "uuid",
+  "game_id": "uuid",
+  "expected_game_version": 17,
+  "idempotency_key": "opaque client-generated key",
+  "payload": {}
+}
+```
 
-Choose a TypeScript monorepo unless discovery shows an existing stack to preserve:
-- `apps/web`: React + TypeScript UI, accessible board, room/lobby, auth and history.
-- `apps/api`: Node.js + TypeScript REST API and Socket.IO/WebSocket gateway; shared pure Ludo rules engine.
-- `packages/game-engine`: deterministic, side-effect-free rules and fairness verifier shared by server and replay tooling. Server remains authoritative.
-- PostgreSQL for durable data; Redis for presence, matchmaking coordination and rate-limit counters.
-- Managed object storage only if user avatars/replays require it; upload validation and private ACLs.
-- Container-based deployment behind TLS reverse proxy/WAF, with separate dev/staging/prod, migrations, secret manager and CI security checks.
-- No client-side secret. Browser persists only non-sensitive UI preferences; do not place long-lived tokens in localStorage.
+### Server event envelope
+```json
+{
+  "type": "game.dice_rolled",
+  "version": 1,
+  "game_id": "uuid",
+  "seq": 42,
+  "ts": "RFC3339 UTC timestamp",
+  "payload": {}
+}
+```
 
-Stack is provisional until repository/source discovery; retain useful existing code rather than replacing it blindly.
+Unknown types/versions are rejected or ignored safely; payloads have schema/size limits. Events include no secret seed, raw token, password, private email, IP or moderation-only data.
 
-## 7. API and event contracts
+### Stable API error-code catalogue
+| Code | HTTP/transport use | Meaning |
+|---|---|---|
+| `AUTH_INVALID` | 401 | Credential/session/ticket invalid; generic externally. |
+| `AUTH_REQUIRED` | 401 | No authenticated session. |
+| `AUTH_FORBIDDEN` | 403 | Authenticated caller lacks permitted role/membership. |
+| `RATE_LIMITED` | 429 | Limit reached; response has safe retry guidance. |
+| `VALIDATION_FAILED` | 400 | Schema/range/format failure with no sensitive detail. |
+| `RESOURCE_NOT_FOUND` | 404 | Resource absent or hidden consistently to prevent IDOR enumeration. |
+| `ROOM_NOT_JOINABLE` | 409 | Full, expired, started or invalid room state. |
+| `GAME_VERSION_CONFLICT` | 409 | Stale command; return current public version/sync instruction. |
+| `COMMAND_REPLAY` | 200/409 | Idempotency key resolved; return original response where valid. |
+| `TURN_NOT_ACTIVE` | 409 | Caller is not the active seat/phase. |
+| `MOVE_ILLEGAL` | 422 | Requested move fails frozen rules. |
+| `FAIRNESS_SETUP_FAILED` | 409 | Entropy/commit-reveal failed; room returned to lobby. |
+| `SERVICE_DEGRADED` | 503 | Safe retry/reconnect; no state was silently applied. |
+| `INTERNAL_ERROR` | 500 | Correlation ID only; no stack trace. |
 
-REST examples: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /me`, `POST /rooms`, `POST /rooms/{id}/join`, `POST /rooms/{id}/invites`, `POST /matchmaking/tickets`, `GET /games/{id}`, `GET /games/{id}/events?after={seq}`, `GET /games/{id}/fairness`, `POST /reports`.
+## 6. Architecture decision
 
-Socket client commands: `room.ready`, `game.roll`, `game.move`, `game.resign`, `game.chat.send`. Each carries request ID/idempotency key and expected game version where relevant. Server events: `room.updated`, `game.started`, `game.dice.rolled`, `game.move.applied`, `game.turn.changed`, `game.player.disconnected`, `game.player.reconnected`, `game.finished`, `game.voided`. Events have monotonically increasing sequence and version. Use a versioned envelope; reject unknown schema versions safely.
+The provisional stack is recorded in [ADR/0001-stack.md](ADR/0001-stack.md): TypeScript monorepo, React web client, Node.js API/roll service, PostgreSQL, Redis and containers **[CONFIRM]**. The server shares a deterministic, pure rules/verifier package with offline verification tooling, but it remains the only authority that accepts live commands.
 
-## 8. Data, privacy and retention
+No secret or long-lived access token may be included in the client bundle or localStorage. Object storage is excluded from v1 unless avatar handling is approved **[CONFIRM]**.
 
-Collect only username, verified email, profile preferences, match events and essential abuse/security telemetry. Define jurisdiction/age assumptions before public launch. Publish privacy notice and terms before real users. Set retention periods for auth/security logs, chat, reports and account deletion. User deletion pseudonymizes or removes profile data while preserving minimal match-integrity records where justified. Provide data access/export workflow. Do not sell or expose game behavior as public profile data by default.
+## 7. Security, privacy and operations
 
-## 9. Delivery phases and acceptance gates
+[THREAT_MODEL.md](THREAT_MODEL.md), [LIVE_SECURITY.md](LIVE_SECURITY.md), [RUNBOOKS.md](RUNBOOKS.md) and [SECURITY.md](../SECURITY.md) are binding design requirements. They cover environment separation, secrets, CI/CD, branch protection, runtime hardening, application controls, auth, abuse detection, log redaction, backups, incident response, release gates and security regression protection.
 
-1. **Discovery/design:** inspect repo, agree exact Ludo rule preset, UX scope, regions/hosting, privacy/age assumptions and initial visibility. Approve ERD and this spec. Deliver rules doc and threat model.
-2. **Foundation:** monorepo, CI, formatting/type checks, environment config, DB migrations, health endpoints, observability baseline and secret handling.
-3. **Accounts/security:** registration, verification, login, refresh rotation, reset, session revocation, profiles, rate limits and security headers.
-4. **Rules engine:** typed state/actions, classic rules, deterministic replay and fairness verifier with published test vectors; persistence-independent and reviewed.
-5. **Rooms/social:** private/public rooms, invite handling, ready/start, friends/blocking and matchmaking.
-6. **Realtime match:** server-authoritative command loop, persistence/outbox, reconnect/resync, timers, termination and fairness proof.
-7. **Web client:** responsive accessible board/lobby, connection UX, history and fairness verifier display.
-8. **Abuse/admin:** reports, mute/block, moderation audit, operational tooling and incident playbooks.
-9. **Hardening/release:** security review, load/reconnect/fault-injection checks, backup restore, staging soak, privacy/terms, alerting and rollback. No launch until critical/high security findings are resolved.
+Collect only the account/profile, match-integrity and security data needed to operate. Define privacy jurisdiction, minimum age, retention periods, privacy notice and terms before beta. Account deletion uses a documented pseudonymization/retention process; integrity proof records are not silently removed.
 
-A phase is complete only when acceptance criteria and verification evidence are recorded in progress.md. Do not describe an unrun check as passed.
+## 8. Delivery phases and definitions of done
 
-## 10. Verification strategy
+1. **Design hardening (current):** documentation, ERD, rules, threat model, live controls, runbooks and repository hygiene.  
+   **Done when:** docs cross-check passes; markdown/diagram/secret scans recorded; required confirmations are resolved; no app code exists.
+2. **Foundation:** workspace, CI, lockfiles, environment contract, migrations framework, health/readiness, observability baseline, container baseline and secret injection.  
+   **Done when:** reviewable PR; formatting/type/lint/test gates green; secret/dependency/SBOM/license scans green or accepted exception documented; non-root image and CI provenance checks pass; docs/progress evidence updated.
+3. **Accounts/security:** registration/verification/login/reset/session lifecycle, rate limits, headers/CORS/CSRF, MFA admin path.  
+   **Done when:** auth, session reuse, CSRF, IDOR, cookie/header and log-redaction tests green; security-path owner review; evidence recorded.
+4. **Rules and fairness engine:** pure rules engine, golden scenarios, fairness vectors and verifier.  
+   **Done when:** all golden/property/fairness-vector tests green; no seed-leak test green; independent review; evidence recorded.
+5. **Private rooms:** room/invite/ready/start/rematch and authorization.  
+   **Done when:** expiry, entropy setup, membership/IDOR/idempotency/concurrency tests green; feature flag defaults documented; evidence recorded.
+6. **Realtime game:** ticketed WebSocket, serialization/outbox, reconnect, deadlines, completion/void/forfeit and proof release.  
+   **Done when:** WebSocket authorization/origin/backpressure tests, reconnect storm, race/duplicate and outbox recovery tests green; evidence recorded.
+7. **Accessible web client:** lobby/board/history/proof view, keyboard/mobile/reduced motion.  
+   **Done when:** keyboard-only complete-match test, screen-reader announcements, contrast, touch-target and mobile-browser acceptance tests pass; evidence recorded.
+8. **Operations/admin:** reports, limited moderation, admin isolation, continuous verifier, dashboards and alerts.  
+   **Done when:** moderation authorization/audit tests, verifier mismatch alert test and runbook drill evidence are recorded.
+9. **Hardening/release:** staging soak, independent assessment, load/chaos, restore drill, game day, privacy/terms and rollout controls.  
+   **Done when:** all E11 launch gates in LIVE_SECURITY are evidenced. No real-user public launch before this gate.
 
-- Unit/property tests: every legal/illegal move, all board boundaries, captures, safe squares, extra turns, turn transitions, finish conditions and seeded deterministic replays.
-- Fairness vectors: commitment verification, deterministic roll sequence, rejection sampling boundary cases, no seed leakage before terminal state, reveal/abort behavior.
-- Integration: transaction rollback, optimistic-version conflicts, idempotency duplicates, concurrent roll/move attempts, outbox recovery, reconnect/resync and seat authorization.
-- Security: auth/session lifecycle, CSRF/CORS, IDOR, injection/XSS, WebSocket origin and per-message controls, rate limits and secret scanning.
-- End-to-end: create/join full 2–4 player room, complete match, disconnect/reconnect, inspect proof and reload match history.
-- Load/chaos: concurrent rooms, socket reconnect storms, DB/Redis restart and failed event broadcast. Validate recovery and no duplicated or lost committed moves.
-- Accessibility: keyboard-only game flow, screen reader updates, contrast and reduced motion.
-- These are planned checks. Report actual command, environment, result and date per run.
+Every phase is developed on a branch, reviewed through a PR, has CI/security checklist evidence and updates `progress.md` before the next phase. Hotfixes retain the mandatory security checks.
 
-## 11. Open decisions before implementation
+## 9. Verification strategy
 
-1. Exact rules preset (especially three sixes, safe squares, capture bonus and timeout/disconnect/forfeit behavior).
-2. Solo practice/bots in first release or multiplayer only.
-3. Public matchmaking and friend system in first release or private rooms first.
-4. Guest play, OAuth provider and email service.
-5. Hosting region, expected launch scale, budget and data residency.
-6. Whether chat is required in first release.
-7. Branding, board style, accessibility language/localization and mobile-first priority.
-8. Privacy jurisdiction, minimum age and moderation coverage.
-9. Repository state/branch workflow and whether the repository should remain public or become private.
+- Unit/property tests: legal/illegal moves, boundaries, captures, safe squares, extra turns, terminal states and deterministic replays.
+- Fairness tests: commitment/reveal validation, exact vectors, rejection sampling, fallback extension, seed non-disclosure, proof release and abort handling.
+- Integration: transactions, locks/version conflicts, command retries, outbox recovery, reconnect, timers, seat authorization and migrations.
+- Security: auth/session lifecycle, CSRF/CORS, IDOR, injection/XSS, WebSocket origin/message auth, rate limits, headers/cookies, secret scan and log redaction.
+- End-to-end: full 2–4 player private-room match, reconnect, history and independent proof view.
+- Load/chaos: concurrent games, reconnect storm, DB/Redis restart and failed fan-out; validate no duplicate/lost committed action.
+- Accessibility: keyboard-only full match, screen reader status, contrast, reduced motion, touch target and supported mobile browser checks.
+- Record exact command, environment, date and result in `progress.md`. A planned check is never reported as passed.
+
+## 10. Open decisions requiring confirmation
+
+1. **[CONFIRM] v1 rules preset:** adopt [RULES.md](RULES.md) proposed defaults, including safe squares, third-six rule, 30-second deadline and deterministic timeout move. Recommended: approve unchanged for a testable first release.
+2. **[CONFIRM] v1 participant policy:** human authenticated accounts only; no bots/guests. Recommended: approve; it reduces fairness and abuse complexity.
+3. **[CONFIRM] rematches:** multiple games per room, each with separate proof. Recommended: approve.
+4. **[CONFIRM] transport:** plain WebSocket with 60-second, single-use REST-issued ticket. Recommended: approve.
+5. **[CONFIRM] stack:** TypeScript monorepo, React, Node.js, PostgreSQL, Redis and containers. Recommended: approve.
+6. **[CONFIRM] production region, scale, budget and data residency:** recommended: one managed production region near primary users, staging isolated, no production data outside production; set numeric capacity after load testing.
+7. **[CONFIRM] privacy/age/legal baseline:** recommended: no under-13 users until legal review; publish privacy notice/terms before invite beta; decide governing jurisdiction with counsel.
+8. **[CONFIRM] player MFA and avatar storage:** recommended: optional passkey/TOTP for players after v1; no uploaded avatars in v1.
+9. **[CONFIRM] repository visibility and license:** repository is currently public; recommended: retain public only after secret scanning and branch protection are confirmed, and decide license in README before outside contributions.
+10. **[CONFIRM] moderation coverage:** recommended: reports plus admin/moderator MFA and audited actions in v1; no chat until v1.1.
