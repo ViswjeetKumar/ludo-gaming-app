@@ -10,7 +10,7 @@ Build a responsive, real-time web application for 2–4 authenticated players. T
 
 Fair play means a documented and independently reproducible dice protocol, immutable game-event history, server-side rule enforcement and operational monitoring. It does not eliminate all residual risks: a malicious server operator could abort a game before revealing its seed, an insider could collude, or a compromised production environment could affect availability. The product must detect, limit, record and communicate these incidents; it must never claim an absolute guarantee.
 
-No cash wagering, entry fees, prizes, real-money wallet, bots or guest seats are in v1 **[CONFIRM]**.
+No cash wagering, entry fees, prizes, real-money wallet, bots or guest seats are in v1. This is an approved v1 boundary (2026-11-01).
 
 ## 2. Scope and release plan
 
@@ -42,8 +42,8 @@ This resolves the earlier scope ambiguity: v1 is private rooms first; matchmakin
 - Argon2id password hashing, breached-password screening, reset tokens/verification tokens hashed at rest and single-use.
 - Short-lived access credentials and rotating refresh-token families in Secure, HttpOnly, SameSite cookies; reuse detection revokes the family.
 - Session list and revoke-all; password change/suspension revokes active refresh families.
-- Player display name, avatar reference and privacy preferences. Data export/deletion follows retention constraints in section 9.
-- Moderator/admin MFA is required; player passkey/TOTP support is deferred **[CONFIRM]**.
+- Player display name and privacy preferences. Uploaded avatars are excluded from v1. Data export/deletion follows retention constraints in section 9.
+- Moderator/admin MFA is required; player passkey/TOTP support is deferred until after v1.
 
 ### Private rooms and matches
 - A signed-in player creates a 2–4 seat private room. The server stores only a hash of the high-entropy join code/invite token, rate-limits guesses, scopes tokens to a room, expires them and records use.
@@ -71,7 +71,7 @@ This resolves the earlier scope ambiguity: v1 is private rooms first; matchmakin
 9. Monitor aborts between commitment/reveal/start by actor/system and alert on anomalous rates. Residual risks are server-abort bias and insider collusion; events, availability records and independent verification make them observable but do not make them impossible.
 
 ### Realtime transport and scaling
-- v1 uses **plain WebSocket** only; it does not use Socket.IO **[CONFIRM]**.
+- v1 uses **plain WebSocket** only; it does not use Socket.IO.
 - Browser first calls an authenticated REST endpoint to obtain a single-use WebSocket ticket with 60-second TTL, bound to authenticated user, requested origin and session. Ticket is sent in the initial WebSocket message, never in URL/query parameters, then consumed and revoked.
 - Enforce TLS, origin allowlist, schema validation, authorization on every message, per-account/IP limits designed to avoid lockout enumeration, per-user connection cap, message-size cap, heartbeat, slow-consumer backpressure/disconnect and reconnection exponential backoff.
 - Horizontally scale with sticky routing at the edge plus Redis pub/sub for game-event fan-out; correctness remains in PostgreSQL transaction serialization. Redis outage stops new socket fan-out safely but cannot lose committed state. Document precise degraded behavior before launch.
@@ -129,9 +129,9 @@ Unknown types/versions are rejected or ignored safely; payloads have schema/size
 
 ## 6. Architecture decision
 
-The provisional stack is recorded in [ADR/0001-stack.md](ADR/0001-stack.md): TypeScript monorepo, React web client, Node.js API/roll service, PostgreSQL, Redis and containers **[CONFIRM]**. The server shares a deterministic, pure rules/verifier package with offline verification tooling, but it remains the only authority that accepts live commands.
+The accepted stack is recorded in [ADR/0001-stack.md](ADR/0001-stack.md): TypeScript monorepo, React web client, Node.js API/roll service, PostgreSQL, Redis and containers. The server shares a deterministic, pure rules/verifier package with offline verification tooling, but it remains the only authority that accepts live commands.
 
-No secret or long-lived access token may be included in the client bundle or localStorage. Object storage is excluded from v1 unless avatar handling is approved **[CONFIRM]**.
+No secret or long-lived access token may be included in the client bundle or localStorage. Object storage and uploaded avatars are excluded from v1.
 
 ## 7. Security, privacy and operations
 
@@ -173,15 +173,19 @@ Every phase is developed on a branch, reviewed through a PR, has CI/security che
 - Accessibility: keyboard-only full match, screen reader status, contrast, reduced motion, touch target and supported mobile browser checks.
 - Record exact command, environment, date and result in `progress.md`. A planned check is never reported as passed.
 
-## 10. Open decisions requiring confirmation
+## 10. Approved v1 decisions
 
-1. **[CONFIRM] v1 rules preset:** adopt [RULES.md](RULES.md) proposed defaults, including safe squares, third-six rule, 30-second deadline and deterministic timeout move. Recommended: approve unchanged for a testable first release.
-2. **[CONFIRM] v1 participant policy:** human authenticated accounts only; no bots/guests. Recommended: approve; it reduces fairness and abuse complexity.
-3. **[CONFIRM] rematches:** multiple games per room, each with separate proof. Recommended: approve.
-4. **[CONFIRM] transport:** plain WebSocket with 60-second, single-use REST-issued ticket. Recommended: approve.
-5. **[CONFIRM] stack:** TypeScript monorepo, React, Node.js, PostgreSQL, Redis and containers. Recommended: approve.
-6. **[CONFIRM] production region, scale, budget and data residency:** recommended: one managed production region near primary users, staging isolated, no production data outside production; set numeric capacity after load testing.
-7. **[CONFIRM] privacy/age/legal baseline:** recommended: no under-13 users until legal review; publish privacy notice/terms before invite beta; decide governing jurisdiction with counsel.
-8. **[CONFIRM] player MFA and avatar storage:** recommended: optional passkey/TOTP for players after v1; no uploaded avatars in v1.
-9. **[CONFIRM] repository visibility and license:** repository is currently public; recommended: retain public only after secret scanning and branch protection are confirmed, and decide license in README before outside contributions.
-10. **[CONFIRM] moderation coverage:** recommended: reports plus admin/moderator MFA and audited actions in v1; no chat until v1.1.
+Project-owner authorization was recorded on 2026-11-01. The following defaults are now binding for implementation:
+
+1. Use the [RULES.md](RULES.md) v1 classic rules preset unchanged, including safe squares, third-six handling, a 30-second deadline and deterministic timeout move.
+2. Permit authenticated human accounts only; no bots or guest seats in v1.
+3. Permit rematches in the same room, with a fresh game ID, seed and proof for every game.
+4. Use plain WebSocket with a 60-second, single-use REST-issued ticket.
+5. Use the accepted TypeScript/React/Node.js/PostgreSQL/Redis/container stack.
+6. Use a single managed production region closest to primary users, separate staging, and keep production data inside the production environment. Select the provider and numeric capacity only after phase-appropriate load evidence.
+7. Exclude users under 13 until a legal review; publish a privacy notice and terms before invite beta; choose jurisdiction with qualified counsel before launch.
+8. Require MFA for moderator/admin roles; defer optional player passkey/TOTP and uploaded avatars until after v1.
+9. Keep the repository public with secret scanning, push protection and active main-branch ruleset configured. No license grant is published yet; public visibility alone does not authorize reuse.
+10. Ship reports plus MFA-protected, audited moderator/admin actions in v1. Text chat is deferred to v1.1 behind a feature flag.
+
+Application implementation still requires an explicit user `GO`.
