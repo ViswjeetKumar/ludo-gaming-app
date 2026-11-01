@@ -1,7 +1,8 @@
 # ADR 0001: Initial application stack
 
-**Status:** Proposed **[CONFIRM]**  
-**Date:** 2026-11-01
+**Status:** Accepted  
+**Date:** 2026-11-01  
+**Approved:** 2026-11-01
 
 ## Decision
 
