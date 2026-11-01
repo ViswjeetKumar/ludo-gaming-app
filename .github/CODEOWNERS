@@ -1,9 +1,13 @@
 # Security-critical paths require repository owner review.
+/game-engine/fairness/ @ViswjeetKumar
+/auth/ @ViswjeetKumar
+/migrations/ @ViswjeetKumar
+/.github/ @ViswjeetKumar
+
+# Planned monorepo equivalents.
 /packages/game-engine/ @ViswjeetKumar
 /apps/api/src/fairness/ @ViswjeetKumar
 /apps/api/src/auth/ @ViswjeetKumar
-/migrations/ @ViswjeetKumar
-/.github/ @ViswjeetKumar
 /docs/FAIRNESS_VECTORS.md @ViswjeetKumar
 /docs/LIVE_SECURITY.md @ViswjeetKumar
 /docs/THREAT_MODEL.md @ViswjeetKumar
