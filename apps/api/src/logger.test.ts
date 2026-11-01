@@ -1,0 +1,1 @@
+import test from "node:test"; import assert from "node:assert/strict"; import {log} from "./logger.js"; test("redacts sensitive fields",()=>assert.equal(log("x",{token:"x",nested:{password:"y"}}).includes("x\""),false));

@@ -34,6 +34,15 @@ Status: Design hardening and v1 decisions complete; waiting for explicit `GO`
 - Updated the specification, README, stack ADR, live-security requirements and disclosure policy. Application code remains intentionally absent until explicit `GO`.
 - Main-branch ruleset configuration is staged in GitHub; it is not claimed active until GitHub confirms the final rule submission.
 
+### 2026-11-01 — Phase 2 foundation started
+- Created branch `phase-2-foundation` from `main` after the explicit start instruction.
+- Added a Node.js workspace boundary with separate API, web and pure game-engine packages plus strict shared TypeScript compiler settings.
+- Added `@ludo/game-engine` deterministic Ludo rules core: 2–4 unique seats, home/track/home-lane movement, safe squares, captures, finish order, six extra turns, third-six forfeiture and a server-authoritative pure transition interface.
+- No network listener, authentication flow, client bundle, database migration, secret, dependency install, lockfile or deployment configuration has been added yet.
+- Added an API public-runtime configuration parser that rejects invalid environments, unsafe production origins and invalid ports, and deliberately excludes all secrets from public runtime configuration.
+- Added an initial React/Vite client shell with disabled room actions. It contains no client-side game simulation, roll generation or mutable match state.
+- Exact dependency declarations are recorded. The lockfile and build verification remain pending for the foundation acceptance gate.
+
 ## Verification evidence — 2026-11-01
 
 | Check | Command/environment | Result |
