@@ -2,7 +2,7 @@
 
 A planned real-time, 2–4 player web Ludo game with server-authoritative rules and independently verifiable dice.
 
-**Status:** Design hardening complete; no application code, dependencies or runtime configuration have been added. Implementation waits for the documented confirmations and an explicit `GO`.
+**Status:** Design hardening and v1 decisions are complete. No application code, dependencies or runtime configuration have been added. Implementation waits for an explicit `GO`.
 
 ## Fairness in plain language
 
@@ -28,12 +28,6 @@ This makes unexpected roll changes detectable. It cannot guarantee that a compro
 
 Please follow [SECURITY.md](SECURITY.md). Do not open a public issue for a suspected vulnerability.
 
-## License decision [CONFIRM]
+## License
 
-This public repository has no license selected yet.
-
-- **MIT:** broad reuse with attribution and no warranty.
-- **Apache-2.0:** broad reuse with explicit patent license/termination terms.
-- **All rights reserved:** code remains publicly visible but reuse is not granted; this limits outside contributions and reuse.
-
-Recommended: decide deliberately before accepting outside contributions; do not add a license file until approved.
+No license grant is published. Public visibility does not grant reuse rights.
