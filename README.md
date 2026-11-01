@@ -20,6 +20,7 @@ This makes unexpected roll changes detectable. It cannot guarantee that a compro
 - [Live security requirements](docs/LIVE_SECURITY.md)
 - [Incident runbooks](docs/RUNBOOKS.md)
 - [Stack ADR](docs/ADR/0001-stack.md)
+- [Requirements traceability](docs/TRACEABILITY.md)
 - [Security disclosure policy](SECURITY.md)
 - [Progress log](progress.md)
 
