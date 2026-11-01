@@ -52,7 +52,7 @@ These controls are mandatory for a real-user launch. They are design requirement
 
 - Use Argon2id with parameters recorded in implementation ADR; support rehash-on-login upgrades. Reject breached passwords. Return generic authentication/reset/registration responses.
 - Defend credential stuffing with per-account, per-IP and global velocity limits plus anomaly challenge; alert without revealing account existence.
-- MFA is mandatory for moderator/admin. Player MFA is optional after v1 **[CONFIRM]**.
+- MFA is mandatory for moderator/admin. Player MFA is optional after v1.
 - Refresh-token rotation must detect reuse and revoke the whole token family. Provide session list/revoke-all.
 - Sending domain must enforce SPF, DKIM and DMARC before email launch.
 - Admin tools use separate origin/network behind VPN or IP allowlist and MFA; audit every role/action/data access.
