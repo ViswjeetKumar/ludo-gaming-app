@@ -4,7 +4,7 @@
 
 Please do not report security vulnerabilities in public issues, discussions, pull requests or social media.
 
-Preferred contact: GitHub private vulnerability reporting for this repository **[CONFIRM]**. Until that feature is enabled, use a private maintainer contact channel that is published here only after approval; do not include a personal email address in the repository.
+Preferred contact: GitHub private vulnerability reporting for this repository, once the repository setting is enabled. Until that setting is verified, use no public issue, discussion, pull request or social-media channel for vulnerability details.
 
 A useful report includes affected component/version, reproduction steps, impact, exploit conditions and any suggested mitigation. Please avoid accessing other users' data, altering games, degrading service or publishing proof-of-concept details.
 
