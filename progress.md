@@ -2,7 +2,7 @@
 
 Repository: https://github.com/ViswjeetKumar/ludo-gaming-app  
 Account: Personal One (`ViswjeetKumar`)  
-Status: Design hardening complete; waiting for confirmations and explicit `GO`
+Status: Design hardening and v1 decisions complete; waiting for explicit `GO`
 
 ## Project goals
 - Build a real-time 2–4 player web Ludo game.
@@ -28,6 +28,12 @@ Status: Design hardening complete; waiting for confirmations and explicit `GO`
 - Added `README.md`, `SECURITY.md`, `.gitignore`, `.env.example`, `.editorconfig`, `.github/CODEOWNERS` and `.github/pull_request_template.md`.
 - No application code, dependency, package manifest, source folder, real secret or personal contact data was added.
 
+### 2026-11-01 — Owner-approved v1 decisions
+- Recorded the project owner's authorization to use the documented v1 rules, human-only accounts, rematches, plain WebSocket tickets, TypeScript/React/Node/PostgreSQL/Redis/container stack, deferred player MFA/avatars and reports-first moderation scope.
+- Kept the public repository unlicensed: no reuse grant is published.
+- Updated the specification, README, stack ADR, live-security requirements and disclosure policy. Application code remains intentionally absent until explicit `GO`.
+- Main-branch ruleset configuration is staged in GitHub; it is not claimed active until GitHub confirms the final rule submission.
+
 ## Verification evidence — 2026-11-01
 
 | Check | Command/environment | Result |
@@ -39,11 +45,9 @@ Status: Design hardening complete; waiting for confirmations and explicit `GO`
 | GitHub CLI / settings | `gh --version` | Not run: `gh` is not installed. Branch protection, push protection, private vulnerability reporting and Dependabot have not been verified or changed. |
 | Application test suite | Not applicable | No application code/dependencies exist by design. |
 
-## Open confirmations before Phase 2
-- Exact v1 rules defaults in `docs/RULES.md`.
-- Human-only accounts, rematches, plain WebSocket and proposed TypeScript/React/Node/PostgreSQL/Redis stack.
-- Production region/data residency/scale, privacy/age baseline, player MFA/avatar scope, repository visibility/license, moderation scope and disclosure channel.
-- GitHub repository security settings need to be configured and then independently verified.
+## Remaining work before Phase 2
+- GitHub must confirm main-branch rules and repository security settings after they are submitted.
+- Choose concrete hosting provider/region, numeric capacity, privacy jurisdiction and production legal materials before invite beta; these are release-gate decisions, not prerequisites for the foundation branch.
 
 ## Next step
-Wait for user’s approval/overrides and explicit `GO`. Phase 2 must start on a branch and follow PR/CI/security-evidence gates.
+Wait for explicit `GO`. Phase 2 must start on a branch and follow PR/CI/security-evidence gates.
